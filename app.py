@@ -1,96 +1,105 @@
 import streamlit as st
-import random
-import time
+import streamlit.components.v1 as components
 
-# Set page config
-st.set_page_config(page_title="Number Master", page_icon="🎯", layout="centered")
+st.set_page_config(page_title="Jump Game", layout="centered")
 
-# Initialize session state
-if "number" not in st.session_state:
-    st.session_state.number = 0
-if "score" not in st.session_state:
-    st.session_state.score = 0
-if "streak" not in st.session_state:
-    st.session_state.streak = 0
-if "difficulty" not in st.session_state:
-    st.session_state.difficulty = "Easy"
-if "start_time" not in st.session_state:
-    st.session_state.start_time = time.time()
-if "max_time" not in st.session_state:
-    st.session_state.max_time = 30
-if "message" not in st.session_state:
-    st.session_state.message = ""
+st.title("🏃 Jumping Game in Streamlit")
 
-# Title
-st.title("🎯 Number Master: Guess & Win")
+st.markdown("Click inside the game area and press **Spacebar** to jump over obstacles.")
 
-# Difficulty selection
-st.sidebar.title("⚙️ Settings")
-difficulty = st.sidebar.selectbox("Select Difficulty", ["Easy", "Medium", "Hard"])
-if difficulty != st.session_state.difficulty:
-    st.session_state.difficulty = difficulty
-    st.session_state.score = 0
-    st.session_state.streak = 0
-    st.session_state.message = ""
+# Embed the game using HTML Canvas + JS
+components.html("""
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  canvas { background: #d0f0f7; display: block; margin: auto; border: 2px solid black; }
+</style>
+</head>
+<body>
+<canvas id="gameCanvas" width="600" height="200"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-# Set number range and timer
-if difficulty == "Easy":
-    number_range = 1, 20
-    st.session_state.max_time = 30
-elif difficulty == "Medium":
-    number_range = 1, 50
-    st.session_state.max_time = 45
-else:
-    number_range = 1, 100
-    st.session_state.max_time = 60
+let player = { x: 50, y: 150, width: 30, height: 30, dy: 0, jumping: false };
+let gravity = 1.5;
+let obstacle = { x: 600, y: 150, width: 30, height: 30, dx: -5 };
+let score = 0;
+let gameOver = false;
 
-# Start new round
-if st.session_state.number == 0:
-    st.session_state.number = random.randint(*number_range)
-    st.session_state.start_time = time.time()
+document.addEventListener("keydown", function(e) {
+  if (e.code === "Space" && !player.jumping) {
+    player.dy = -20;
+    player.jumping = true;
+  }
+});
 
-# Timer display
-elapsed = int(time.time() - st.session_state.start_time)
-remaining = st.session_state.max_time - elapsed
-if remaining <= 0:
-    st.warning("⏰ Time's up! The number was: " + str(st.session_state.number))
-    st.session_state.number = 0
-    st.session_state.streak = 0
-else:
-    st.write(f"⏱️ Time Remaining: **{remaining}** seconds")
+function resetGame() {
+  obstacle.x = 600;
+  player.y = 150;
+  player.dy = 0;
+  player.jumping = false;
+  score = 0;
+  gameOver = false;
+  loop();
+}
 
-# Game input
-guess = st.number_input(f"Guess the number ({number_range[0]} - {number_range[1]}):", min_value=number_range[0], max_value=number_range[1], step=1)
+function loop() {
+  if (gameOver) return;
 
-if st.button("🎯 Submit Guess"):
-    if remaining <= 0:
-        st.warning("⏰ Time's up! Start a new round.")
-    else:
-        if guess < st.session_state.number:
-            st.session_state.message = "🔽 Too low!"
-        elif guess > st.session_state.number:
-            st.session_state.message = "🔼 Too high!"
-        else:
-            st.session_state.message = "✅ Correct!"
-            st.session_state.score += 10
-            st.session_state.streak += 1
-            st.balloons()
-            st.session_state.number = 0  # Start new round
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-st.markdown(f"### 📢 {st.session_state.message}")
+  // Draw player
+  ctx.fillStyle = "green";
+  ctx.fillRect(player.x, player.y, player.width, player.height);
 
-# Stats
-st.markdown("---")
-st.subheader("📊 Game Stats")
-col1, col2, col3 = st.columns(3)
-col1.metric("💰 Score", st.session_state.score)
-col2.metric("🔥 Streak", st.session_state.streak)
-col3.metric("🎯 Difficulty", st.session_state.difficulty)
+  // Player physics
+  player.y += player.dy;
+  player.dy += gravity;
+  if (player.y >= 150) {
+    player.y = 150;
+    player.dy = 0;
+    player.jumping = false;
+  }
 
-# Reset Button
-if st.button("🔁 Reset Game"):
-    for key in st.session_state.keys():
-        st.session_state[key] = 0
-    st.session_state.difficulty = difficulty
-    st.session_state.message = ""
-    st.rerun()
+  // Draw obstacle
+  ctx.fillStyle = "red";
+  ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+
+  obstacle.x += obstacle.dx;
+  if (obstacle.x < -30) {
+    obstacle.x = 600 + Math.random() * 200;
+    score++;
+  }
+
+  // Collision detection
+  if (
+    player.x < obstacle.x + obstacle.width &&
+    player.x + player.width > obstacle.x &&
+    player.y < obstacle.y + obstacle.height &&
+    player.y + player.height > obstacle.y
+  ) {
+    gameOver = true;
+    ctx.fillStyle = "black";
+    ctx.font = "30px Arial";
+    ctx.fillText("Game Over!", 220, 100);
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 260, 130);
+    ctx.fillText("Refresh to Restart", 210, 160);
+    return;
+  }
+
+  // Draw score
+  ctx.fillStyle = "black";
+  ctx.font = "16px Arial";
+  ctx.fillText("Score: " + score, 10, 20);
+
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
+""", height=240)
